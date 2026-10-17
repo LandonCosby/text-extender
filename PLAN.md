@@ -1,0 +1,101 @@
+# Text Extender: Plan
+
+A Windows background app: type a shortcut such as `;addr`, press a hotkey, and the shortcut is replaced by its full message.
+
+**Decisions so far**
+- **Trigger:** type the shortcut, then press the hotkey (configurable, default `Ctrl+Space`).
+- **Tech:** Python, with `pynput` for system-wide key listening and typing, and `tkinter` for the window.
+- **Interface:** a system-tray icon (`pystray`) plus a settings window.
+- **Speed:** a delay between typed characters. 0 means instant, which pastes through the clipboard.
+
+---
+
+## Step 1: Project setup ✅
+- [x] Create the layout:
+  ```
+  text-extender/
+  ├── main.py              # starts the app
+  ├── extender/
+  │   ├── config.py        # load/save snippets and settings
+  │   ├── buffer.py        # remembers recently typed characters
+  │   ├── matcher.py       # finds which shortcut was just typed
+  │   ├── expander.py      # erases the shortcut and types/pastes the message
+  │   ├── listener.py      # global keyboard listening and the hotkey
+  │   ├── settings_window.py
+  │   └── tray.py
+  ├── tests/
+  ├── requirements.txt     # pynput, pystray, Pillow, pytest
+  ├── .gitignore
+  └── README.md
+  ```
+- [x] **Downloads:** installed `pynput` 1.8.2, `pystray` 0.19.5 and `Pillow` 12.3.0 (`Pillow` is what `pystray` uses to draw the tray icon). `pytest` was already installed.
+
+## Step 2: Storing snippets and settings (`config.py`)
+- [ ] One JSON file in `%APPDATA%\TextExtender\config.json`, outside the project folder. Snippets can hold personal details (addresses, phone numbers), so they should never end up in a git repo.
+  ```json
+  {
+    "hotkey": "<ctrl>+<space>",
+    "char_delay_ms": 0,
+    "snippets": { ";addr": "123 Example St\nSpringfield", ";sig": "Best,\nYour Name" }
+  }
+  ```
+- [ ] Defaults when the file is missing, and a backup copy if the file is damaged.
+- [ ] Validation: shortcuts must be unique and have no spaces, the message can't be empty, and the delay must be between 0 and 200 ms.
+- [ ] Atomic save: write a temp file and then rename it, so a crash can't corrupt the config.
+
+## Step 3: Remembering what was typed (`buffer.py`)
+- [ ] Keep the last ~50 typed characters.
+- [ ] Backspace removes the last character.
+- [ ] Clear the buffer on Enter, Tab, Esc, arrow keys, Home/End, mouse clicks and window switches. After any of those, the "just typed" text might not be next to the cursor any more.
+
+## Step 4: Finding the shortcut (`matcher.py`)
+- [ ] When the hotkey is pressed, find the **longest** shortcut that the buffer ends with. That way `;addr2` wins over `;addr`.
+- [ ] No match means do nothing (optionally a short tray notification).
+
+## Step 5: Doing the expansion (`expander.py`)
+- [ ] Wait for the hotkey's keys (Ctrl and so on) to be released first, so the text isn't typed as Ctrl+letters.
+- [ ] Press Backspace once per character of the shortcut to erase it.
+- [ ] Output the message:
+  - **Delay 0:** copy it to the clipboard, press Ctrl+V, then restore whatever was on the clipboard before.
+  - **Delay > 0:** type it character by character with that pause between each.
+  - Handle new lines (Enter) and non-English characters.
+- [ ] Run on a background thread, and ignore our own typed keys in the listener so they don't refill the buffer.
+
+## Step 6: Keyboard listening and the hotkey (`listener.py`)
+- [ ] A `pynput` keyboard listener that feeds typed characters into the buffer.
+- [ ] Hotkey detection from the configured combination. Changing it in settings takes effect straight away, without a restart.
+- [ ] Pause/resume support for the tray menu.
+
+## Step 7: Settings window (`settings_window.py`, tkinter)
+- [ ] **Snippets list** showing each shortcut and the start of its message.
+- [ ] **Add / Edit / Delete** with a form: one-line shortcut, multi-line message.
+- [ ] **Hotkey:** a "Change…" button that records the next key combination you press, and warns about common clashes (Ctrl+C, Ctrl+V, Alt+Tab and so on).
+- [ ] **Speed:** a slider from Instant to Slow (0–200 ms per character) with a preview box.
+- [ ] Save straight to the config, and show errors in the window.
+
+## Step 8: Tray icon (`tray.py`)
+- [ ] Menu: **Open settings**, **Pause / Resume**, **Quit**.
+- [ ] Run `tkinter` on the main thread and the tray icon on its own thread, and make sure Quit stops everything cleanly.
+
+## Step 9: Tests (`tests/`, pytest)
+- [ ] Config: defaults, saving and reloading, rejecting bad input, recovering from a damaged file.
+- [ ] Buffer: typing, backspace, clearing on navigation keys.
+- [ ] Matcher: longest match, no match, shortcuts that are prefixes of others.
+- [ ] Expander: with a fake keyboard, check the right number of backspaces, the typed text, newlines, the delay, and the clipboard being restored.
+- [ ] Hotkey parsing and validation.
+
+## Step 10: Trying it in real apps
+- [ ] Notepad, a browser text box, Word, a chat app.
+- [ ] Edge cases:
+  - shortcuts typed with Shift
+  - very long messages
+  - pressing the hotkey with nothing typed
+  - apps running as administrator. Windows blocks a normal program from typing into those; note it in the README.
+
+## Step 11: Starting with Windows (optional)
+- [ ] A "Start with Windows" checkbox in settings that adds a shortcut to the Startup folder.
+- [ ] Later, optionally, package it as a single `.exe` with PyInstaller (another download).
+
+---
+
+**Suggested order:** steps 1–5 with their tests first, so the core works from the command line. Then step 6 for a working app with a config file. Then steps 7–8 for the window and tray, and finish with 10–11.

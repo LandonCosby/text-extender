@@ -1,0 +1,30 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Snippets and settings. The app keeps them in %APPDATA%, but never commit a copy:
+# they can contain personal details.
+config.json
+*.config.json
+
+# Build output (PyInstaller)
+build/
+dist/
+*.spec
+
+# Secrets and local configuration
+.env
+.env.*
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
