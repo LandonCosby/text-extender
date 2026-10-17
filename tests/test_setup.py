@@ -4,7 +4,7 @@ import importlib
 
 import pytest
 
-MODULES = ["config", "buffer", "matcher", "expander", "listener", "settings_window", "tray"]
+MODULES = ["config", "buffer", "matcher", "clipboard", "expander", "listener", "settings_window", "tray"]
 
 
 @pytest.mark.parametrize("name", MODULES)
@@ -17,6 +17,13 @@ def test_dependencies_are_installed(package):
     importlib.import_module(package)
 
 
-def test_main_runs():
+def test_main_imports():
+    # main() itself runs until Ctrl+C, so it's tried by hand rather than here.
     import main
-    assert main.main() == 0
+    assert callable(main.main)
+
+
+def test_hotkeys_are_shown_readably():
+    import main
+    assert main.describe_hotkey("<ctrl>+<space>") == "Ctrl+Space"
+    assert main.describe_hotkey("<ctrl>+<alt>+e") == "Ctrl+Alt+E"

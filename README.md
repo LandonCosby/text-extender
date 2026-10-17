@@ -20,6 +20,25 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+It runs in the terminal until you press Ctrl+C there. To try it, open any text box (Notepad, a browser), type `;te`, and press **Ctrl+Space**.
+
+Until the settings window exists, add snippets by editing the settings file it prints (then restart it):
+
+```json
+{
+  "hotkey": "<ctrl>+<space>",
+  "char_delay_ms": 0,
+  "snippets": {
+    ";te": "Text Extender is working!",
+    ";sig": "Best,\nYour Name"
+  }
+}
+```
+
+- `char_delay_ms`: 0 pastes instantly; 1–200 types one character at a time with that many milliseconds between.
+- A shortcut must come after a space or a new line (`hi ;te` works, `hi;te` doesn't).
+- It can't type into programs running as administrator; Windows blocks that.
+
 ## Tests
 
 ```
