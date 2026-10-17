@@ -23,7 +23,3 @@ def test_main_imports():
     assert callable(main.main)
 
 
-def test_hotkeys_are_shown_readably():
-    import main
-    assert main.describe_hotkey("<ctrl>+<space>") == "Ctrl+Space"
-    assert main.describe_hotkey("<ctrl>+<alt>+e") == "Ctrl+Alt+E"

@@ -20,9 +20,11 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-It runs in the terminal until you press Ctrl+C there. To try it, open any text box (Notepad, a browser), type `;te`, and press **Ctrl+Space**.
+It opens the settings window, where you can add, edit and delete snippets, change the hotkey and set the typing speed. Changes are saved and used straight away. Closing the window quits.
 
-Until the settings window exists, add snippets by editing the settings file it prints (then restart it):
+To try it, open any text box (Notepad, a browser), type `;te`, and press **Ctrl+Space**.
+
+The settings are stored as JSON, which you can also edit by hand while the app is closed:
 
 ```json
 {

@@ -78,12 +78,13 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
 - [x] `python main.py` runs it in the terminal until Ctrl+C. On first run it saves an example snippet, `;te`.
 - [x] The hotkey must have exactly one key besides the modifiers (added to the step 2 rules).
 
-## Step 7: Settings window (`settings_window.py`, tkinter)
-- [ ] **Snippets list** showing each shortcut and the start of its message.
-- [ ] **Add / Edit / Delete** with a form: one-line shortcut, multi-line message.
-- [ ] **Hotkey:** a "Change…" button that records the next key combination you press, and warns about common clashes (Ctrl+C, Ctrl+V, Alt+Tab and so on).
-- [ ] **Speed:** a slider from Instant to Slow (0–200 ms per character) with a preview box.
-- [ ] Save straight to the config, and show errors in the window.
+## Step 7: Settings window (`settings_window.py`, tkinter) ✅
+- [x] **Snippets list** showing each shortcut and the start of its message (`↵…` marks more lines).
+- [x] **Add / Edit / Delete** with a form: one-line shortcut, multi-line message. Renaming keeps the snippet's place; deleting asks first.
+- [x] **Hotkey:** a "Change…" button that records the next key combination you press (Esc cancels), and warns about common clashes (Ctrl+C, Ctrl+V, Alt+Tab and so on, plus Ctrl+Alt+letter, which can clash with AltGr characters). The background listener is paused while recording, so even the current hotkey can be pressed.
+- [x] **Speed:** a slider from Instant to Slow (0–200 ms per character) with a preview line that types out a sentence at that speed. Saved a moment after the slider stops moving.
+- [x] Save straight to the config, and show errors in the window. Every change is checked first; if it isn't allowed or saving fails, the reason appears at the bottom and nothing changes.
+- [x] `python main.py` opens the window with the listener running; closing it quits (until step 8's tray icon). Sharp on high-DPI screens.
 
 ## Step 8: Tray icon (`tray.py`)
 - [ ] Menu: **Open settings**, **Pause / Resume**, **Quit**.

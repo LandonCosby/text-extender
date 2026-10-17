@@ -1,21 +1,26 @@
 """Start the text extender.
 
-For now it runs in this terminal (the tray icon and settings window come in plan
-steps 7 and 8). Snippets and settings are edited in the config file it prints.
-Press Ctrl+C here to quit.
+Opens the settings window, with the keyboard listener running in the background.
+Closing the window quits (the tray icon in plan step 8 will keep it running instead).
 """
 
+import ctypes
 import sys
+import tkinter as tk
 
 from extender import config
 from extender.listener import TextExtender
+from extender.settings_window import SettingsWindow, describe_hotkey
 
 EXAMPLE_SNIPPETS = {";te": "Text Extender is working!"}
 
 
-def describe_hotkey(hotkey):
-    """'<ctrl>+<space>' -> 'Ctrl+Space'."""
-    return "+".join(part.strip("<>").capitalize() for part in hotkey.split("+"))
+def sharp_on_high_dpi_screens():
+    """Without this, Windows stretches tkinter windows on scaled displays and they look blurry."""
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except (AttributeError, OSError):
+        pass
 
 
 def main():
@@ -29,19 +34,27 @@ def main():
     app = TextExtender(settings)
     app.on_no_match = lambda: print("  (hotkey pressed, but no shortcut was just typed)")
     app.start()
+    print(f"Text Extender is running. Hotkey: {describe_hotkey(settings.hotkey)}. "
+          f"Settings file: {path}")
+    print("Close the settings window (or press Ctrl+C here) to quit.")
 
-    print("Text Extender is running.")
-    print(f"  Hotkey: {describe_hotkey(settings.hotkey)}")
-    delay = "instant (paste)" if settings.char_delay_ms == 0 else f"{settings.char_delay_ms} ms per character"
-    print(f"  Typing speed: {delay}")
-    print(f"  Snippets ({len(settings.snippets)}): {', '.join(settings.snippets) or 'none yet'}")
-    print(f"  Settings file: {path}")
-    print("Type a shortcut, then press the hotkey. Press Ctrl+C here to quit.")
+    def apply(new_settings):
+        config.save(new_settings, path)
+        app.set_config(new_settings)
+
+    sharp_on_high_dpi_screens()
+    root = tk.Tk()
+    SettingsWindow(root, settings, on_change=apply, on_capture_start=app.pause, on_capture_end=app.resume)
+
+    def keep_ctrl_c_working():
+        # tkinter only lets Python notice Ctrl+C between events, so wake it regularly.
+        root.after(250, keep_ctrl_c_working)
+
+    keep_ctrl_c_working()
     try:
-        while app.is_running():
-            app.join(timeout=0.5)  # short waits, so Ctrl+C is noticed
+        root.mainloop()
     except KeyboardInterrupt:
-        pass
+        root.destroy()
     finally:
         app.stop()
     print("Stopped.")
