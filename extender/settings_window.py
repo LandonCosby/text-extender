@@ -110,15 +110,17 @@ def describe_speed(delay_ms):
 
 class SettingsWindow:
     def __init__(self, master, config, on_change, on_capture_start=lambda: None,
-                 on_capture_end=lambda: None, confirm=None):
+                 on_capture_end=lambda: None, confirm=None, on_quit=None):
         """on_change(new_config) saves and applies settings; it may raise ConfigError
         or OSError. The capture callbacks pause and resume the global listener while
-        a new hotkey is recorded. confirm(title, question) -> bool asks the user."""
+        a new hotkey is recorded. confirm(title, question) -> bool asks the user.
+        on_quit, if given, adds a "Quit Text Extender" button that ends the app."""
         self.master = master
         self.config = copy.deepcopy(config)
         self.on_change = on_change
         self.on_capture_start = on_capture_start
         self.on_capture_end = on_capture_end
+        self.on_quit = on_quit
         self.confirm = confirm or (lambda title, question: messagebox.askyesno(title, question, parent=master))
         self.editing = None  # shortcut of the snippet in the form, or None for a new one
         self.capturing = False
@@ -195,13 +197,27 @@ class SettingsWindow:
         self.preview_label = ttk.Label(settings, foreground="#555")
         self.preview_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
-        self.status = ttk.Label(outer, text="")
-        self.status.grid(row=4, column=0, sticky="w", pady=(8, 0))
+        bottom = ttk.Frame(outer)
+        bottom.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        bottom.columnconfigure(0, weight=1)
+        self.status = ttk.Label(bottom, text="")
+        self.status.grid(row=0, column=0, sticky="w")
+        self.quit_button = None
+        if self.on_quit is not None:
+            # Closing the window keeps the app running in the tray; this ends it.
+            self.quit_button = ttk.Button(bottom, text="Quit Text Extender", command=self.quit_app)
+            self.quit_button.grid(row=0, column=1, sticky="e")
         self._show_settings()
 
     def _show_settings(self):
         self.hotkey_label.configure(text=describe_hotkey(self.config.hotkey))
         self.speed_label.configure(text=describe_speed(self.speed_value()))
+
+    def quit_app(self):
+        """End the whole app (not just this window). Settings are already saved."""
+        if self.capturing:
+            self.stop_hotkey_capture()
+        self.on_quit()
 
     def show_status(self, text, error=False):
         self.status.configure(text=text, foreground="#b00020" if error else "#1b6e20")

@@ -86,9 +86,15 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
 - [x] Save straight to the config, and show errors in the window. Every change is checked first; if it isn't allowed or saving fails, the reason appears at the bottom and nothing changes.
 - [x] `python main.py` opens the window with the listener running; closing it quits (until step 8's tray icon). Sharp on high-DPI screens.
 
-## Step 8: Tray icon (`tray.py`)
-- [ ] Menu: **Open settings**, **Pause / Resume**, **Quit**.
-- [ ] Run `tkinter` on the main thread and the tray icon on its own thread, and make sure Quit stops everything cleanly.
+## Step 8: Tray icon (`tray.py`) ✅
+- [x] Menu: **Open settings** (also a double-click on the icon), **Pause / Resume**, **Quit**.
+- [x] Run `tkinter` on the main thread and the tray icon on its own thread, and make sure Quit stops everything cleanly. Menu clicks are queued and handled on the main thread.
+- [x] Closing the settings window keeps the app running in the tray. A **Quit Text Extender** button in the window ends the app.
+- [x] The icon greys out while paused, and its tooltip shows the hotkey (or "paused"). Recording a hotkey doesn't undo a pause chosen from the tray.
+- [x] Only one copy can run at a time (two would type every message twice). Starting it again opens the running copy's settings window.
+- [x] Starting the app opens the settings window.
+- [x] Tray clicks keep working even if handling one fails, Quit always ends the app, and errors from every part of the app go to `textextender.log` (needed under `pythonw`, which has no terminal).
+- [ ] Not done: a notification when the hotkey finds no shortcut. It would pop up every time you pressed the hotkey by accident, so it was left out.
 
 ## Step 9: Tests (`tests/`, pytest)
 - [x] Config: defaults, saving and reloading, rejecting bad input, recovering from a damaged file (done with step 2).

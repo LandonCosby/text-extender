@@ -17,10 +17,19 @@ python -m pip install -r requirements.txt
 ## Run
 
 ```
-python main.py
+pythonw main.py
 ```
 
-It opens the settings window, where you can add, edit and delete snippets, change the hotkey and set the typing speed. Changes are saved and used straight away. Closing the window quits.
+(`pythonw` starts it without a terminal window; `python main.py` works too.)
+
+It runs in the **system tray** (the blue "T…" icon; on Windows 11 it may be under the `^` arrow). Right-click it for:
+- **Open settings** (or double-click the icon): add, edit and delete snippets, change the hotkey and set the typing speed. Changes are saved and used straight away. Closing the window keeps the app running; the **Quit Text Extender** button at the bottom ends it.
+- **Pause / Resume**: the icon turns grey while paused.
+- **Quit**
+
+Starting it opens the settings window. Only one copy runs at a time: starting it again while it's running just brings up the running copy's settings window.
+
+If something goes wrong, errors are written to `textextender.log` next to the settings file.
 
 To try it, open any text box (Notepad, a browser), type `;te`, and press **Ctrl+Space**.
 

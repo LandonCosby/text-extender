@@ -4,7 +4,7 @@ import importlib
 
 import pytest
 
-MODULES = ["config", "buffer", "matcher", "clipboard", "expander", "listener", "settings_window", "tray"]
+MODULES = ["config", "buffer", "matcher", "clipboard", "expander", "listener", "settings_window", "tray", "logs"]
 
 
 @pytest.mark.parametrize("name", MODULES)

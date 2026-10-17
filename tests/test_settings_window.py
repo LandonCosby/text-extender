@@ -22,33 +22,6 @@ from extender.settings_window import (
 )
 
 
-@pytest.fixture(scope="module")
-def tk_app():
-    # tkinter is started once for all these tests: starting it again and again in one
-    # process occasionally fails on Windows ("Can't find a usable tk.tcl").
-    try:
-        app = tk.Tk()
-    except tk.TclError as e:
-        pytest.skip(f"tkinter couldn't start: {e}")
-    app.withdraw()
-    yield app
-    app.destroy()
-
-
-@pytest.fixture
-def root(tk_app):
-    """A fresh, hidden window for each test."""
-    window = tk.Toplevel(tk_app)
-    window.withdraw()
-    # tkinter normally just prints errors raised in event handlers; make them fail the test.
-    errors = []
-    tk_app.report_callback_exception = lambda kind, error, tb: errors.append(error)
-    yield window
-    window.update()  # run anything still waiting, such as handlers triggered while building
-    window.destroy()
-    assert errors == [], f"error in a tkinter handler: {errors[0]!r}"
-
-
 class Recorder:
     """Stands in for saving: remembers each config, or fails if told to."""
 
@@ -345,6 +318,32 @@ def test_clashing_hotkey_can_be_accepted(make_window, recorder):
     window.capture_key_press(key("Control_L"))
     window.capture_key_press(key("c"))
     assert recorder.saved[-1].hotkey == "<ctrl>+c"
+
+
+# Quitting
+
+def test_no_quit_button_unless_quitting_is_possible(make_window):
+    assert make_window().quit_button is None
+
+
+def test_quit_button_ends_the_app(root, recorder):
+    quits = []
+    window = SettingsWindow(root, Config(), on_change=recorder, on_quit=lambda: quits.append(True))
+    assert window.quit_button.cget("text") == "Quit Text Extender"
+    window.quit_button.invoke()
+    assert quits == [True]
+    assert recorder.saved == []  # nothing to save: changes were already saved
+
+
+def test_quitting_while_recording_a_hotkey_resumes_the_listener_first(root, recorder):
+    events = []
+    window = SettingsWindow(root, Config(), on_change=recorder,
+                            on_capture_start=lambda: events.append("paused"),
+                            on_capture_end=lambda: events.append("resumed"),
+                            on_quit=lambda: events.append("quit"))
+    window.start_hotkey_capture()
+    window.quit_app()
+    assert events == ["paused", "resumed", "quit"]
 
 
 # Typing speed
