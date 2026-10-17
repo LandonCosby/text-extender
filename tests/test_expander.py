@@ -10,7 +10,14 @@ import pytest
 from pynput.keyboard import Key
 
 from extender.clipboard import ClipboardContents, ClipboardError
-from extender.expander import MODIFIER_WAIT, PASTE_SETTLE, Expander
+from extender.expander import (
+    KEY_PAUSE,
+    MIN_TYPING_DELAY_MS,
+    MODIFIER_WAIT,
+    PASTE_SETTLE,
+    VK_V,
+    Expander,
+)
 from extender.matcher import Match
 
 
@@ -134,7 +141,19 @@ def test_line_breaks_are_typed_as_enter_and_tabs_as_tab():
 def test_waits_the_delay_after_every_character():
     expander, _, clock = make()
     expander.expand(Match(";x", "abc\nd"), char_delay_ms=40)
-    assert clock.sleeps == [0.04] * 5
+    assert clock.sleeps == [KEY_PAUSE] + [0.04] * 5  # a pause after the Backspaces, then each character
+
+
+def test_delays_faster_than_apps_can_keep_up_with_are_slowed_down():
+    expander, _, clock = make()
+    expander.expand(Match(";x", "abc"), char_delay_ms=1)
+    assert clock.sleeps[1:] == [MIN_TYPING_DELAY_MS / 1000] * 3
+
+
+def test_paste_pauses_after_the_backspaces_and_around_ctrl_v():
+    expander, _, clock = make()
+    expander.expand(ADDR, char_delay_ms=0)
+    assert clock.sleeps == [KEY_PAUSE, KEY_PAUSE, KEY_PAUSE, PASTE_SETTLE]
 
 
 def test_non_english_text_is_typed():
@@ -155,7 +174,7 @@ def test_typing_does_not_touch_the_clipboard():
 def ctrl_v_pressed(keyboard):
     events = keyboard.events
     i = events.index(("press", Key.ctrl))
-    return events[i:i + 3] == [("press", Key.ctrl), ("tap", "v"), ("release", Key.ctrl)]
+    return events[i:i + 3] == [("press", Key.ctrl), ("tap", VK_V), ("release", Key.ctrl)]
 
 
 def test_delay_zero_pastes_with_ctrl_v():
@@ -196,7 +215,7 @@ def test_image_on_the_clipboard_is_kept_by_typing_instead():
     assert clipboard.writes == []
     assert clipboard.contents == ClipboardContents("other")
     assert keyboard.typed() == ADDR.message
-    assert clock.sleeps == []  # typed with no delay
+    assert clock.sleeps[1:] == [MIN_TYPING_DELAY_MS / 1000] * len(ADDR.message)  # as fast as is safe
 
 
 @pytest.mark.parametrize("fail", ["read", "write"])

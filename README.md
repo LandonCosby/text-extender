@@ -46,7 +46,7 @@ The settings are stored as JSON, which you can also edit by hand while the app i
 }
 ```
 
-- `char_delay_ms`: 0 pastes instantly; 1–200 types one character at a time with that many milliseconds between.
+- `char_delay_ms`: 0 pastes instantly; 1–200 types one character at a time with that many milliseconds between (never faster than 25 ms, which is about as fast as apps reliably keep up with).
 - A shortcut must come after a space or a new line (`hi ;te` works, `hi;te` doesn't).
 - It can't type into programs running as administrator; Windows blocks that.
 
@@ -55,6 +55,8 @@ The settings are stored as JSON, which you can also edit by hand while the app i
 ```
 python -m pytest tests
 ```
+
+To try it in real Notepad (it takes over the keyboard for about 30 seconds), and for a by-hand checklist for other apps, see [TESTING.md](TESTING.md).
 
 ## Where snippets are stored
 

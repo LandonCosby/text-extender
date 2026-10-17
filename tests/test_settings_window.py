@@ -123,7 +123,8 @@ def test_message_preview():
 
 def test_describe_speed():
     assert describe_speed(0) == "Instant (paste)"
-    assert describe_speed(25) == "25 ms per character"
+    assert describe_speed(40) == "40 ms per character"
+    assert describe_speed(1) == "25 ms per character"  # typed at the safe minimum anyway
 
 
 # The snippet list
@@ -355,6 +356,15 @@ def test_moving_the_slider_saves_the_speed(make_window, recorder):
     assert window.speed_label.cget("text") == "42 ms per character"
     window.save_speed()  # normally runs a moment after the slider stops
     assert recorder.saved[-1].char_delay_ms == 42
+
+
+def test_slider_snaps_up_to_the_fastest_safe_speed(make_window, recorder):
+    window = make_window()
+    window.speed_scale.set(5)
+    window.speed_moved()
+    assert window.speed_label.cget("text") == "25 ms per character"
+    window.save_speed()
+    assert recorder.saved[-1].char_delay_ms == 25
 
 
 def test_unchanged_speed_is_not_saved_again(make_window, recorder):

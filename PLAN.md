@@ -96,7 +96,7 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
 - [x] Tray clicks keep working even if handling one fails, Quit always ends the app, and errors from every part of the app go to `textextender.log` (needed under `pythonw`, which has no terminal).
 - [ ] Not done: a notification when the hotkey finds no shortcut. It would pop up every time you pressed the hotkey by accident, so it was left out.
 
-## Step 9: Tests (`tests/`, pytest)
+## Step 9: Tests (`tests/`, pytest) ✅
 - [x] Config: defaults, saving and reloading, rejecting bad input, recovering from a damaged file (done with step 2).
 - [x] Buffer: typing, backspace, clearing on navigation keys (done with step 3).
 - [x] Matcher: longest match, no match, shortcuts that are prefixes of others (done with step 4).
@@ -104,12 +104,11 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
 - [x] Hotkey parsing and validation, and the listener with simulated key events (done with step 6).
 
 ## Step 10: Trying it in real apps
-- [ ] Notepad, a browser text box, Word, a chat app.
-- [ ] Edge cases:
-  - shortcuts typed with Shift
-  - very long messages
-  - pressing the hotkey with nothing typed
-  - apps running as administrator. Windows blocks a normal program from typing into those; note it in the README.
+- [x] An automatic check in real Notepad: `python tools/try_in_notepad.py` (see TESTING.md). It found two real bugs, now fixed:
+  - Pasting sometimes typed "v" instead: Ctrl+V straight after the Backspaces was too fast, and pynput could send V as a typed letter. Now V is sent as the V key, with short pauses after the Backspaces and around Ctrl+V.
+  - Typing dropped or swapped characters (capitals, em dashes, emoji): apps can't keep up with simulated keys faster than about 25 ms apart. Text is now sent as Unicode characters through Windows' SendInput (`keyboard.py`), whole emoji at once, never faster than 25 ms per character. The speed slider snaps 1–24 ms up to 25.
+  - 10/10 checks pass, twice in a row.
+- [ ] By hand, with the checklist in TESTING.md: the real hotkey, a browser, Word, a chat app, Shift in shortcuts, the clipboard with an image, and administrator apps (expected not to work; noted in the README).
 
 ## Step 11: Starting with Windows (optional)
 - [ ] A "Start with Windows" checkbox in settings that adds a shortcut to the Startup folder.

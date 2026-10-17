@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from .config import MAX_CHAR_DELAY_MS, ConfigError
+from .expander import MIN_TYPING_DELAY_MS
 from .listener import parse_hotkey
 
 PREVIEW_TEXT = "The quick brown fox jumps over the lazy dog."
@@ -105,7 +106,11 @@ def message_preview(message):
 
 
 def describe_speed(delay_ms):
-    return "Instant (paste)" if delay_ms == 0 else f"{delay_ms} ms per character"
+    """How fast messages appear. Delays under MIN_TYPING_DELAY_MS are typed at that
+    speed anyway (apps can't keep up with faster), so that's what's shown."""
+    if delay_ms == 0:
+        return "Instant (paste)"
+    return f"{max(delay_ms, MIN_TYPING_DELAY_MS)} ms per character"
 
 
 class SettingsWindow:
@@ -362,7 +367,10 @@ class SettingsWindow:
     # Typing speed
 
     def speed_value(self):
-        return int(round(float(self.speed_scale.get())))
+        """The slider's delay. Anything between Instant and the slowest-needed gap snaps
+        up to MIN_TYPING_DELAY_MS, the fastest that apps reliably keep up with."""
+        delay = int(round(float(self.speed_scale.get())))
+        return 0 if delay == 0 else max(delay, MIN_TYPING_DELAY_MS)
 
     def speed_moved(self):
         self.speed_label.configure(text=describe_speed(self.speed_value()))

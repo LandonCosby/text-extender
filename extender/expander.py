@@ -16,16 +16,32 @@ Expansions are meant to run on a background thread (the listener in step 6 does 
 While one runs, is_typing is True so the listener can ignore the keys it presses.
 """
 
+import sys
 import threading
 import time
 
-from pynput.keyboard import Controller, Key
+from pynput.keyboard import Controller, Key, KeyCode
 
 from .clipboard import ClipboardError, WindowsClipboard
+
+VK_V = KeyCode.from_vk(0x56)  # the V key itself; a typed letter 'v' wouldn't trigger Ctrl+V
+
+
+def default_keyboard():
+    if sys.platform == "win32":
+        from .keyboard import WindowsKeyboard
+        return WindowsKeyboard()
+    return Controller()
+
 
 MODIFIER_WAIT = 1.0  # longest to wait for the hotkey to be released, in seconds
 MODIFIER_POLL = 0.01
 PASTE_SETTLE = 0.15  # time for the app to read the clipboard before it's put back
+# Real apps need time to keep up with simulated keys (measured in Windows 11 Notepad):
+# typed faster than this, characters go missing or get swapped, and Ctrl+V straight
+# after the Backspaces can arrive as a plain 'v'.
+MIN_TYPING_DELAY_MS = 25  # slowest-needed gap between typed characters
+KEY_PAUSE = 0.03  # after the Backspaces, and around Ctrl+V
 
 
 def normalise_line_breaks(text):
@@ -38,7 +54,7 @@ class Expander:
                  sleep=time.sleep, clock=time.monotonic):
         """keyboard and clipboard can be swapped for fakes in tests. held_modifiers
         returns the modifier keys being held down right now (the listener knows)."""
-        self.keyboard = keyboard if keyboard is not None else Controller()
+        self.keyboard = keyboard if keyboard is not None else default_keyboard()
         self._clipboard = clipboard
         self.held_modifiers = held_modifiers
         self.sleep = sleep
@@ -65,6 +81,7 @@ class Expander:
                 self.wait_for_modifiers()
                 for _ in match.shortcut:
                     self.keyboard.tap(Key.backspace)
+                self.sleep(KEY_PAUSE)
                 if char_delay_ms == 0:
                     self.paste(match.message)
                 else:
@@ -98,7 +115,9 @@ class Expander:
             self.type_text(message, 0)
             return
         self.keyboard.press(Key.ctrl)
-        self.keyboard.tap("v")
+        self.sleep(KEY_PAUSE)
+        self.keyboard.tap(VK_V)
+        self.sleep(KEY_PAUSE)
         self.keyboard.release(Key.ctrl)
         self.sleep(PASTE_SETTLE)
         try:
@@ -107,7 +126,9 @@ class Expander:
             pass  # the message was pasted; the old text just couldn't be put back
 
     def type_text(self, message, pause):
-        """Type the message one character at a time, waiting `pause` seconds after each."""
+        """Type the message one character at a time, waiting `pause` seconds after each
+        (never less than MIN_TYPING_DELAY_MS, so the app keeps up)."""
+        pause = max(pause, MIN_TYPING_DELAY_MS / 1000)
         for ch in normalise_line_breaks(message):
             if ch == "\n":
                 self.keyboard.tap(Key.enter)
@@ -115,5 +136,4 @@ class Expander:
                 self.keyboard.tap(Key.tab)
             else:
                 self.keyboard.type(ch)
-            if pause:
-                self.sleep(pause)
+            self.sleep(pause)
