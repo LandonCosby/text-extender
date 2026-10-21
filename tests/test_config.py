@@ -42,11 +42,12 @@ def test_missing_file_gives_defaults(path):
     assert config.hotkey == "<ctrl>+<space>"
     assert config.char_delay_ms == 0
     assert config.snippets == {}
+    assert config.theme == "light"
     assert not path.exists()  # nothing is written until something is saved
 
 
 def test_save_then_load_gives_the_same_config(path):
-    original = Config(hotkey="<ctrl>+<alt>+e", char_delay_ms=25,
+    original = Config(hotkey="<ctrl>+<alt>+e", char_delay_ms=25, theme="dark",
                       snippets={";addr": "123 Example St\nSpringfield", ";sig": "Best,\nYour Name"})
     cfg.save(original, path)
     assert cfg.load(path) == original
@@ -72,6 +73,16 @@ def test_missing_settings_are_filled_with_defaults(path):
     assert config.hotkey == cfg.DEFAULT_HOTKEY
     assert config.char_delay_ms == cfg.DEFAULT_CHAR_DELAY_MS
     assert config.snippets == {";hi": "Hello"}
+    assert config.theme == cfg.DEFAULT_THEME
+
+
+def test_unknown_theme_falls_back_to_light_and_keeps_the_rest(path):
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"theme": "purple", "snippets": {";hi": "Hello"}}), encoding="utf-8")
+    config = cfg.load(path)
+    assert config.theme == "light"
+    assert config.snippets == {";hi": "Hello"}
+    assert damaged_backups(path) == []
 
 
 @pytest.mark.parametrize("contents", [
@@ -221,3 +232,14 @@ def test_remove_snippet():
 def test_editing_a_missing_snippet_is_refused(action):
     with pytest.raises(ConfigError, match="no snippet"):
         action(Config())
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_accepts_known_themes(theme):
+    cfg.validate_theme(theme)
+
+
+@pytest.mark.parametrize("theme", ["", "Dark", "blue", None])
+def test_rejects_unknown_themes(theme):
+    with pytest.raises(ConfigError):
+        cfg.validate_theme(theme)

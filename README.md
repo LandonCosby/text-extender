@@ -23,7 +23,7 @@ pythonw main.py
 (`pythonw` starts it without a terminal window; `python main.py` works too.)
 
 It runs in the **system tray** (the blue "T…" icon; on Windows 11 it may be under the `^` arrow). Right-click it for:
-- **Open settings** (or double-click the icon): add, edit and delete snippets, change the hotkey and set the typing speed. Changes are saved and used straight away. Closing the window keeps the app running; the **Quit Text Extender** button at the bottom ends it.
+- **Open settings** (or double-click the icon): add, edit and delete snippets, change the hotkey, set the typing speed and switch between light and dark mode. Changes are saved and used straight away. Closing the window keeps the app running; the **Quit Text Extender** button at the bottom ends it.
 - **Pause / Resume**: the icon turns grey while paused.
 - **Quit**
 
@@ -39,6 +39,7 @@ The settings are stored as JSON, which you can also edit by hand while the app i
 {
   "hotkey": "<ctrl>+<space>",
   "char_delay_ms": 0,
+  "theme": "light",
   "snippets": {
     ";te": "Text Extender is working!",
     ";sig": "Best,\nYour Name"
@@ -46,6 +47,7 @@ The settings are stored as JSON, which you can also edit by hand while the app i
 }
 ```
 
+- `theme`: `"light"` or `"dark"`, the look of the settings window.
 - `char_delay_ms`: 0 pastes instantly; 1–200 types one character at a time with that many milliseconds between (never faster than 25 ms, which is about as fast as apps reliably keep up with).
 - A shortcut must come after a space or a new line (`hi ;te` works, `hi;te` doesn't).
 - It can't type into programs running as administrator; Windows blocks that.

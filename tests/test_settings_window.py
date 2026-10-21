@@ -389,3 +389,28 @@ def test_preview_types_the_text_out(make_window, root):
             break
         root.after(2)
     assert window.preview_label.cget("text") == PREVIEW_TEXT
+
+
+# Appearance
+
+def test_starts_in_the_saved_theme(make_window):
+    window = make_window(Config(theme="dark"))
+    assert window.theme_var.get() == "dark"
+    assert window.message_text.cget("background") == window.palette["field"]
+
+
+def test_switching_to_dark_mode_saves_and_recolours(make_window, recorder):
+    window = make_window()
+    light_field = window.message_text.cget("background")
+    window.theme_buttons["dark"].invoke()
+    assert recorder.saved[-1].theme == "dark"
+    assert window.message_text.cget("background") != light_field
+    assert "dark mode" in window.status.cget("text")
+
+
+def test_failed_theme_save_keeps_the_old_theme(make_window, recorder):
+    recorder.fail_with = OSError("Disk is full")
+    window = make_window()
+    window.theme_buttons["dark"].invoke()
+    assert window.theme_var.get() == "light"
+    assert window.config.theme == "light"

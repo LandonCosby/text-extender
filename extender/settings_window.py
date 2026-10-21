@@ -1,4 +1,4 @@
-"""The window for managing snippets, the hotkey and the typing speed (plan step 7).
+"""The window for managing snippets, the hotkey, the typing speed and the theme (plan step 7).
 
 Every change is saved straight away through the on_change callback (which writes the
 config file and hands the new settings to the running listener). If a change isn't
@@ -10,7 +10,8 @@ import copy
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .config import MAX_CHAR_DELAY_MS, ConfigError
+from . import theme
+from .config import MAX_CHAR_DELAY_MS, THEMES, ConfigError
 from .expander import MIN_TYPING_DELAY_MS
 from .listener import parse_hotkey
 
@@ -133,77 +134,104 @@ class SettingsWindow:
         self._bindings = []
         self._speed_job = None
         self._preview_job = None
+        self._status_error = False
 
         master.title("Text Extender – Settings")
-        master.minsize(640, 520)
+        master.minsize(680, 700)
+        self.palette = theme.apply(master, self.config.theme)
         self._build()
+        theme.style_text(self.message_text, self.palette)
         self.refresh_list()
         self.new_snippet()
 
     # Layout
 
     def _build(self):
-        outer = ttk.Frame(self.master, padding=12)
+        outer = ttk.Frame(self.master, padding=(20, 16, 20, 14))
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(1, weight=1)
 
-        ttk.Label(outer, text="Snippets", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
-        list_frame = ttk.Frame(outer)
-        list_frame.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
+        header = ttk.Frame(outer)
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        ttk.Label(header, text="Text Extender", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(header, text="Type a shortcut, then press the hotkey to swap it for its message.",
+                  style="Subtitle.TLabel").pack(anchor="w")
+
+        # Snippet list
+        list_card = self._card(outer, row=1)
+        list_card.rowconfigure(1, weight=1)
+        ttk.Label(list_card, text="Snippets", style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Button(list_card, text="+ New snippet", command=self.new_snippet).grid(row=0, column=1, sticky="e")
+        list_frame = ttk.Frame(list_card, style="Inner.TFrame")
+        list_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(list_frame, columns=("shortcut", "message"), show="headings",
-                                 selectmode="browse", height=8)
-        self.tree.heading("shortcut", text="Shortcut")
-        self.tree.heading("message", text="Message")
-        self.tree.column("shortcut", width=140, stretch=False)
+                                 selectmode="browse", height=6)
+        self.tree.heading("shortcut", text="SHORTCUT", anchor="w")
+        self.tree.heading("message", text="MESSAGE", anchor="w")
+        self.tree.column("shortcut", width=150, stretch=False)
         self.tree.column("message", width=420)
         self.tree.grid(row=0, column=0, sticky="nsew")
         scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
-        scroll.grid(row=0, column=1, sticky="ns")
+        scroll.grid(row=0, column=1, sticky="ns", padx=(4, 0))
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.load_selected())
 
-        form = ttk.LabelFrame(outer, text="Snippet", padding=8)
-        form.grid(row=2, column=0, sticky="ew")
-        form.columnconfigure(1, weight=1)
-        ttk.Label(form, text="Shortcut").grid(row=0, column=0, sticky="w")
+        # Snippet form
+        form = self._card(outer, row=2)
+        self.form_title = ttk.Label(form, text="New snippet", style="CardTitle.TLabel")
+        self.form_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Label(form, text="Shortcut", style="Field.TLabel").grid(row=1, column=0, sticky="w", padx=(0, 12))
         self.shortcut_var = tk.StringVar()
         self.shortcut_entry = ttk.Entry(form, textvariable=self.shortcut_var, width=24)
-        self.shortcut_entry.grid(row=0, column=1, sticky="w", pady=2)
-        ttk.Label(form, text="Message").grid(row=1, column=0, sticky="nw")
-        self.message_text = tk.Text(form, height=5, wrap="word", font=("Segoe UI", 10), undo=True)
-        self.message_text.grid(row=1, column=1, sticky="ew", pady=2)
-        buttons = ttk.Frame(form)
-        buttons.grid(row=2, column=1, sticky="e", pady=(4, 0))
-        ttk.Button(buttons, text="New", command=self.new_snippet).pack(side="left", padx=2)
+        self.shortcut_entry.grid(row=1, column=1, sticky="w", pady=(0, 8))
+        ttk.Label(form, text="Message", style="Field.TLabel").grid(row=2, column=0, sticky="nw", padx=(0, 12), pady=(6, 0))
+        self.message_text = tk.Text(form, height=4, wrap="word", font=theme.FONT, undo=True)
+        self.message_text.grid(row=2, column=1, sticky="ew")
+        buttons = ttk.Frame(form, style="Inner.TFrame")
+        buttons.grid(row=3, column=1, sticky="e", pady=(10, 0))
         self.delete_button = ttk.Button(buttons, text="Delete", command=self.delete_snippet)
-        self.delete_button.pack(side="left", padx=2)
-        ttk.Button(buttons, text="Save snippet", command=self.save_snippet).pack(side="left", padx=2)
+        self.delete_button.pack(side="left", padx=(0, 8))
+        ttk.Button(buttons, text="Save snippet", style="Accent.TButton", command=self.save_snippet).pack(side="left")
 
-        settings = ttk.LabelFrame(outer, text="Settings", padding=8)
-        settings.grid(row=3, column=0, sticky="ew", pady=(8, 0))
-        settings.columnconfigure(1, weight=1)
-        ttk.Label(settings, text="Hotkey").grid(row=0, column=0, sticky="w")
-        self.hotkey_label = ttk.Label(settings, font=("Segoe UI", 10, "bold"))
-        self.hotkey_label.grid(row=0, column=1, sticky="w")
+        # Settings
+        settings = self._card(outer, row=3)
+        ttk.Label(settings, text="Settings", style="CardTitle.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        ttk.Label(settings, text="Hotkey", style="Card.TLabel").grid(row=1, column=0, sticky="w", padx=(0, 16))
+        self.hotkey_label = ttk.Label(settings, style="Value.TLabel")
+        self.hotkey_label.grid(row=1, column=1, sticky="w")
         self.hotkey_button = ttk.Button(settings, text="Change…", command=self.start_hotkey_capture)
-        self.hotkey_button.grid(row=0, column=2, sticky="e")
+        self.hotkey_button.grid(row=1, column=2, sticky="e")
 
-        ttk.Label(settings, text="Typing speed").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        self.speed_label = ttk.Label(settings, width=22)
-        self.speed_label.grid(row=1, column=2, sticky="e", pady=(8, 0))
+        ttk.Label(settings, text="Typing speed", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=(12, 0))
+        speed_row = ttk.Frame(settings, style="Inner.TFrame")
+        speed_row.grid(row=2, column=1, sticky="ew", pady=(12, 0))
+        speed_row.columnconfigure(0, weight=1)
         # Given its starting value up front: set() would call speed_moved and save.
-        self.speed_scale = ttk.Scale(settings, from_=0, to=MAX_CHAR_DELAY_MS, orient="horizontal",
+        self.speed_scale = ttk.Scale(speed_row, from_=0, to=MAX_CHAR_DELAY_MS, orient="horizontal",
                                      value=self.config.char_delay_ms, command=lambda v: self.speed_moved())
-        self.speed_scale.grid(row=1, column=1, sticky="ew", padx=8, pady=(8, 0))
-        ttk.Button(settings, text="Preview", command=self.preview_speed).grid(row=2, column=2, sticky="e", pady=(4, 0))
-        self.preview_label = ttk.Label(settings, foreground="#555")
-        self.preview_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.speed_scale.grid(row=0, column=0, sticky="ew")
+        self.speed_label = ttk.Label(speed_row, width=20, style="Muted.TLabel", anchor="e")
+        self.speed_label.grid(row=0, column=1, sticky="e", padx=(12, 12))
+        ttk.Button(settings, text="Preview", command=self.preview_speed).grid(row=2, column=2, sticky="e", pady=(12, 0))
+        self.preview_label = ttk.Label(settings, style="Muted.TLabel")
+        self.preview_label.grid(row=3, column=1, columnspan=2, sticky="w", pady=(4, 0))
+
+        ttk.Label(settings, text="Appearance", style="Card.TLabel").grid(row=4, column=0, sticky="w", pady=(10, 0))
+        switch = ttk.Frame(settings, style="Inner.TFrame")
+        switch.grid(row=4, column=1, sticky="w", pady=(10, 0))
+        self.theme_var = tk.StringVar(value=self.config.theme)
+        self.theme_buttons = {}
+        for name in THEMES:
+            button = ttk.Radiobutton(switch, text=name.capitalize(), value=name, variable=self.theme_var,
+                                     style="Segment.Toolbutton", command=self.theme_chosen)
+            button.pack(side="left")
+            self.theme_buttons[name] = button
 
         bottom = ttk.Frame(outer)
-        bottom.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        bottom.grid(row=4, column=0, sticky="ew", pady=(12, 0))
         bottom.columnconfigure(0, weight=1)
         self.status = ttk.Label(bottom, text="")
         self.status.grid(row=0, column=0, sticky="w")
@@ -213,6 +241,31 @@ class SettingsWindow:
             self.quit_button = ttk.Button(bottom, text="Quit Text Extender", command=self.quit_app)
             self.quit_button.grid(row=0, column=1, sticky="e")
         self._show_settings()
+
+    def _card(self, parent, row):
+        """A bordered panel in the given row of the window, with its second column stretching."""
+        card = ttk.Frame(parent, style="Card.TFrame", padding=(16, 12))
+        card.grid(row=row, column=0, sticky="nsew", pady=(0, 12) if row < 3 else 0)
+        card.columnconfigure(1, weight=1)
+        return card
+
+    def apply_theme(self):
+        """Colour the window for the current theme (ttk styles, plus the bits they miss)."""
+        self.palette = theme.apply(self.master, self.config.theme)
+        theme.style_text(self.message_text, self.palette)
+        self.show_status(self.status.cget("text"), error=self._status_error)
+
+    def theme_chosen(self):
+        name = self.theme_var.get()
+        if name == self.config.theme:
+            return True
+        new = copy.deepcopy(self.config)
+        new.theme = name
+        if not self.commit(new, f"Switched to {name} mode."):
+            self.theme_var.set(self.config.theme)
+            return False
+        self.apply_theme()
+        return True
 
     def _show_settings(self):
         self.hotkey_label.configure(text=describe_hotkey(self.config.hotkey))
@@ -225,7 +278,8 @@ class SettingsWindow:
         self.on_quit()
 
     def show_status(self, text, error=False):
-        self.status.configure(text=text, foreground="#b00020" if error else "#1b6e20")
+        self._status_error = error
+        self.status.configure(text=text, foreground=self.palette["error" if error else "success"])
 
     # Saving
 
@@ -250,6 +304,7 @@ class SettingsWindow:
 
     def new_snippet(self):
         self.editing = None
+        self.form_title.configure(text="New snippet")
         self.tree.selection_set(())
         self.shortcut_var.set("")
         self.message_text.delete("1.0", "end")
@@ -262,6 +317,7 @@ class SettingsWindow:
             return
         shortcut = selected[0]
         self.editing = shortcut
+        self.form_title.configure(text=f"Edit {shortcut}")
         self.shortcut_var.set(shortcut)
         self.message_text.delete("1.0", "end")
         self.message_text.insert("1.0", self.config.snippets[shortcut])
@@ -287,6 +343,7 @@ class SettingsWindow:
         self.tree.selection_set(shortcut)
         self.tree.see(shortcut)
         self.editing = shortcut
+        self.form_title.configure(text=f"Edit {shortcut}")
         self.delete_button.state(["!disabled"])
         return True
 
