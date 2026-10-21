@@ -43,11 +43,12 @@ def test_missing_file_gives_defaults(path):
     assert config.char_delay_ms == 0
     assert config.snippets == {}
     assert config.theme == "light"
+    assert config.auto_expand is False
     assert not path.exists()  # nothing is written until something is saved
 
 
 def test_save_then_load_gives_the_same_config(path):
-    original = Config(hotkey="<ctrl>+<alt>+e", char_delay_ms=25, theme="dark",
+    original = Config(hotkey="<ctrl>+<alt>+e", char_delay_ms=25, theme="dark", auto_expand=True,
                       snippets={";addr": "123 Example St\nSpringfield", ";sig": "Best,\nYour Name"})
     cfg.save(original, path)
     assert cfg.load(path) == original
@@ -93,6 +94,7 @@ def test_unknown_theme_falls_back_to_light_and_keeps_the_rest(path):
     json.dumps({"hotkey": "<nonsense>"}),
     json.dumps({"snippets": {"has space": "x"}}),
     json.dumps({"snippets": ["not", "a", "dict"]}),
+    json.dumps({"auto_expand": "yes"}),
 ])
 def test_damaged_file_is_backed_up_and_defaults_are_used(path, contents):
     path.parent.mkdir(parents=True)
@@ -243,3 +245,9 @@ def test_accepts_known_themes(theme):
 def test_rejects_unknown_themes(theme):
     with pytest.raises(ConfigError):
         cfg.validate_theme(theme)
+
+
+@pytest.mark.parametrize("value", [1, "true", None])
+def test_auto_expand_must_be_true_or_false(value):
+    with pytest.raises(ConfigError):
+        cfg.validate_auto_expand(value)

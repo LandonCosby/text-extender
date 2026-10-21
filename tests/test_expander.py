@@ -289,3 +289,63 @@ def test_real_clipboard_round_trip():
     finally:
         clipboard.restore(saved)
     assert clipboard.read() == saved
+
+
+# Placeholders and {cursor}
+
+def test_placeholders_are_filled_in_before_typing():
+    expander, keyboard, _ = make(clipboard=FakeClipboard(ClipboardContents("text", "ABC-123")))
+    expander.expand(Match(";ref", "Ref: {clipboard}"), char_delay_ms=10)
+    assert keyboard.typed() == "Ref: ABC-123"
+
+
+def test_clipboard_placeholder_with_a_pasted_message_restores_the_clipboard():
+    clipboard = FakeClipboard(ClipboardContents("text", "ABC-123"))
+    expander, _, _ = make(clipboard=clipboard)
+    expander.expand(Match(";ref", "Ref: {clipboard}"), char_delay_ms=0)
+    assert clipboard.writes == ["Ref: ABC-123"]
+    assert clipboard.contents == ClipboardContents("text", "ABC-123")
+
+
+def test_clipboard_placeholder_with_an_image_on_the_clipboard_gives_nothing():
+    expander, keyboard, _ = make(clipboard=FakeClipboard(ClipboardContents("other")))
+    expander.expand(Match(";ref", "Ref: {clipboard}"), char_delay_ms=10)
+    assert keyboard.typed() == "Ref: "
+
+
+def test_cursor_moves_back_after_the_message():
+    expander, keyboard, _ = make()
+    expander.expand(Match(";dear", "Dear {cursor},"), char_delay_ms=10)
+    assert keyboard.typed() == "Dear ,"
+    assert keyboard.events[-1] == ("tap", Key.left)
+    assert sum(1 for e in keyboard.events if e == ("tap", Key.left)) == 1
+
+
+def test_no_cursor_placeholder_means_no_moving():
+    expander, keyboard, _ = make()
+    expander.expand(ADDR, char_delay_ms=0)
+    assert ("tap", Key.left) not in keyboard.events
+
+
+# Automatic expansion endings
+
+def test_typed_ending_is_erased_and_typed_again_after_the_message():
+    expander, keyboard, _ = make()
+    expander.expand(Match(";te", "Working!"), char_delay_ms=10, typed_after=",")
+    assert backspaces(keyboard) == len(";te,")
+    assert keyboard.typed() == "Working!,"
+
+
+def test_held_back_key_is_pressed_after_the_message():
+    expander, keyboard, _ = make()
+    expander.expand(Match(";te", "Working!"), char_delay_ms=0, key_after=Key.enter)
+    assert backspaces(keyboard) == len(";te")
+    taps = [e for e in keyboard.events if e[0] == "tap"]
+    assert taps[-1] == ("tap", Key.enter)
+
+
+def test_cursor_moves_back_past_the_ending_too():
+    expander, keyboard, _ = make()
+    expander.expand(Match(";dear", "Dear {cursor},"), char_delay_ms=10, typed_after=" ")
+    assert keyboard.typed() == "Dear , "
+    assert sum(1 for e in keyboard.events if e == ("tap", Key.left)) == 2

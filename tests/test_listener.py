@@ -22,6 +22,7 @@ from extender.listener import (
 from extender.matcher import Match
 
 VK_LCTRL, VK_LSHIFT, VK_LALT, VK_SPACE = 0xA2, 0xA0, 0xA4, 0x20
+VK_RETURN, VK_TAB = 0x0D, 0x09
 VK = {"e": 0x45, "f2": 0x71}
 
 
@@ -39,8 +40,8 @@ class FakeExpander:
         self.keyboard = FakeKeyboard()
         self.expanded = []
 
-    def expand(self, match, char_delay_ms):
-        self.expanded.append((match, char_delay_ms))
+    def expand(self, match, char_delay_ms, **ending):
+        self.expanded.append((match, char_delay_ms, ending) if ending else (match, char_delay_ms))
 
 
 class Window:
@@ -301,3 +302,76 @@ def test_real_listeners_start_and_stop():
     extender.stop()
     extender.join(timeout=2)
     assert not extender.is_running()
+
+
+# Automatic expansion
+
+SIG = Match(";sig", "Best,\nYour Name")
+
+
+@pytest.fixture
+def auto(app):
+    app.config.auto_expand = True
+    return app
+
+
+def test_auto_expand_is_off_by_default(app):
+    type_text(app, ";sig ")
+    assert app.expander.expanded == []
+
+
+@pytest.mark.parametrize("ending", [" ", ",", ".", "!", "?", ")"])
+def test_space_or_punctuation_expands_and_is_kept(auto, ending):
+    type_text(auto, "thanks ;sig" + ending)
+    assert auto.expander.expanded == [(SIG, 15, {"typed_after": ending})]
+    assert auto.buffer.text == ""
+
+
+@pytest.mark.parametrize("vk, key", [(VK_RETURN, Key.enter), (VK_TAB, Key.tab)])
+def test_enter_or_tab_is_held_back_and_pressed_after(auto, vk, key):
+    type_text(auto, ";sig")
+    assert key_down(auto, vk) is True
+    assert key_up(auto, vk) is True
+    assert auto.expander.expanded == [(SIG, 15, {"key_after": key})]
+
+
+def test_enter_without_a_shortcut_goes_through(auto):
+    type_text(auto, "hello")
+    assert key_down(auto, VK_RETURN) is False
+    assert key_up(auto, VK_RETURN) is False
+    assert auto.expander.expanded == []
+
+
+def test_shift_enter_is_left_alone(auto):
+    type_text(auto, ";sig")
+    key_down(auto, VK_LSHIFT)
+    assert key_down(auto, VK_RETURN) is False
+
+
+def test_letters_and_digits_dont_end_a_shortcut(auto):
+    type_text(auto, ";sigx ;sig2 ;sig_")
+    assert auto.expander.expanded == []
+
+
+def test_shortcut_inside_a_word_does_not_expand(auto):
+    type_text(auto, "x;sig ")
+    assert auto.expander.expanded == []
+
+
+def test_waits_when_a_longer_shortcut_could_follow(auto):
+    auto.config.snippets = {";a": "short", ";a.b": "longer"}
+    type_text(auto, ";a.b ")
+    assert auto.expander.expanded == [(Match(";a.b", "longer"), 15, {"typed_after": " "})]
+
+
+def test_paused_does_not_auto_expand(auto):
+    auto.pause()
+    type_text(auto, ";sig ")
+    assert key_down(auto, VK_RETURN) is False
+    assert auto.expander.expanded == []
+
+
+def test_hotkey_still_works_with_auto_expand_on(auto):
+    type_text(auto, ";sig")
+    press_hotkey(auto)
+    assert auto.expander.expanded == [(SIG, 15)]

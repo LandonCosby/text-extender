@@ -39,6 +39,14 @@ Tick each one off, and note anything that goes wrong.
 - [ ] Back on **Instant (paste)**: copy some text first, expand `;te`, then paste with Ctrl+V somewhere: your copied text comes back, not the snippet.
 - [ ] Take a screenshot with Win+Shift+S (so the clipboard holds an image), expand `;te`, then paste: the screenshot is still on the clipboard.
 
+**Automatic expansion and placeholders** (tick *Also expand without the hotkey* first)
+- [ ] In Notepad, type `;te,`: it becomes "Text Extender is working!," without pressing the hotkey.
+- [ ] In a chat app, type `;te` and press Enter: the message is sent with the full text, not `;te`.
+- [ ] In a browser form, type `;te` and press Tab: it expands, then moves to the next box.
+- [ ] Add `;dear` = `Dear {cursor},` and expand it in Notepad and Word: the cursor ends up after "Dear ".
+- [ ] Add `;now` = `{date} {time}`: it gives today's date and time in your usual format.
+- [ ] Add `;cb` = `[{clipboard}]`: with text copied it gives that text in brackets; with a screenshot copied it gives `[]` and the screenshot is still on the clipboard.
+
 **Settings and tray**
 - [ ] Change the hotkey to Ctrl+Alt+F2 in settings: it works straight away; Ctrl+Space no longer expands.
 - [ ] Pause from the tray: the icon goes grey and nothing expands. Resume: it works again.

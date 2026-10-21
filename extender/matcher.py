@@ -34,3 +34,15 @@ def find_match(typed, snippets) -> Optional[Match]:
                 and (best is None or len(shortcut) > len(best.shortcut))):
             best = Match(shortcut, message)
     return best
+
+
+def could_continue(typed, snippets):
+    """Whether the end of the typed text could be the start of a shortcut (or a whole
+    one). Automatic expansion waits then: with ';a' and ';a.b' saved, the '.' after
+    ';a' may be part of ';a.b'."""
+    for shortcut in snippets:
+        for length in range(1, len(shortcut) + 1):
+            start = shortcut[:length]
+            if typed.endswith(start) and stands_alone(typed, start):
+                return True
+    return False

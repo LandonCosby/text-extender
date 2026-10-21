@@ -10,7 +10,9 @@ An expansion:
      something other than text (an image, files) or can't be used, the message is
      typed quickly instead, so nothing on the clipboard is lost;
    - with a delay, it's typed one character at a time with that pause between each.
-   Line breaks are typed as Enter and tabs as Tab.
+   Line breaks are typed as Enter and tabs as Tab. Placeholders such as {date} are
+   filled in first (see placeholders.py), and {cursor} moves the cursor back to its
+   spot afterwards.
 
 Expansions are meant to run on a background thread (the listener in step 6 does that).
 While one runs, is_typing is True so the listener can ignore the keys it presses.
@@ -23,6 +25,7 @@ import time
 from pynput.keyboard import Controller, Key, KeyCode
 
 from .clipboard import ClipboardError, WindowsClipboard
+from .placeholders import fill
 
 VK_V = KeyCode.from_vk(0x56)  # the V key itself; a typed letter 'v' wouldn't trigger Ctrl+V
 
@@ -73,21 +76,46 @@ class Expander:
     def is_typing(self):
         return self._typing.is_set()
 
-    def expand(self, match, char_delay_ms):
-        """Replace match.shortcut, just typed, with match.message."""
+    def expand(self, match, char_delay_ms, typed_after="", key_after=None):
+        """Replace match.shortcut, just typed, with match.message.
+
+        For automatic expansion: typed_after is the space or punctuation typed after
+        the shortcut, which is erased too and put back after the message. key_after
+        (Enter or Tab) was kept from the app, and is pressed after the message."""
         with self._one_at_a_time:
             self._typing.set()
             try:
                 self.wait_for_modifiers()
-                for _ in match.shortcut:
+                filled = fill(match.message, clipboard_text=self.clipboard_text)
+                for _ in match.shortcut + typed_after:
                     self.keyboard.tap(Key.backspace)
                 self.sleep(KEY_PAUSE)
+                text = filled.text + typed_after
                 if char_delay_ms == 0:
-                    self.paste(match.message)
+                    self.paste(text)
                 else:
-                    self.type_text(match.message, char_delay_ms / 1000)
+                    self.type_text(text, char_delay_ms / 1000)
+                if key_after is not None:
+                    self.keyboard.tap(key_after)
+                    self.sleep(KEY_PAUSE)
+                if filled.cursor_back:
+                    self.move_left(filled.cursor_back + len(typed_after) + (key_after is not None))
             finally:
                 self._typing.clear()
+
+    def clipboard_text(self):
+        """The clipboard's text for {clipboard}, or "" if it holds none."""
+        try:
+            contents = self.clipboard.read()
+        except ClipboardError:
+            return ""
+        return contents.text if contents.kind == "text" else ""
+
+    def move_left(self, count):
+        """Press Left `count` times, for {cursor}."""
+        for _ in range(count):
+            self.keyboard.tap(Key.left)
+            self.sleep(MIN_TYPING_DELAY_MS / 1000)
 
     def wait_for_modifiers(self):
         """Wait until the hotkey's modifiers are let go. If they're still held after

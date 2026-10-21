@@ -56,12 +56,12 @@ def apply(window, name):
     style.configure("Inner.TFrame", background=p["card"])
     style.configure("TLabel", background=p["bg"], foreground=p["text"])
     style.configure("Title.TLabel", font=("Segoe UI Semibold", 16))
-    style.configure("Subtitle.TLabel", foreground=p["muted"])
     style.configure("Card.TLabel", background=p["card"])
     style.configure("CardTitle.TLabel", background=p["card"], font=("Segoe UI Semibold", 11))
     style.configure("Field.TLabel", background=p["card"], foreground=p["muted"], font=("Segoe UI", 9))
     style.configure("Value.TLabel", background=p["card"], font=SEMIBOLD)
     style.configure("Muted.TLabel", background=p["card"], foreground=p["muted"])
+    style.configure("Hint.TLabel", background=p["field"], foreground=p["muted"])
 
     # Buttons: plain ones are quiet, Accent ones are the main action.
     button_states = dict(
@@ -91,6 +91,16 @@ def apply(window, name):
               foreground=[("selected", p["accent_text"])],
               bordercolor=[("selected", p["accent"]), ("focus", p["accent"])],
               relief=[("selected", "raised"), ("pressed", "raised")])
+
+    # Checkboxes on a card
+    style.configure("Card.TCheckbutton", background=p["card"], foreground=p["text"], focuscolor=p["card"],
+                    indicatorbackground=p["field"], indicatorforeground=p["accent_text"],
+                    upperbordercolor=p["field_border"], lowerbordercolor=p["field_border"],
+                    indicatormargin=(0, 0, 8, 0), indicatorsize=14)
+    style.map("Card.TCheckbutton", background=[("active", p["card"])],
+              indicatorbackground=[("selected", p["accent"]), ("pressed", p["button_pressed"])],
+              upperbordercolor=[("selected", p["accent"]), ("focus", p["accent"])],
+              lowerbordercolor=[("selected", p["accent"]), ("focus", p["accent"])])
 
     # Text boxes
     style.configure("TEntry", padding=(8, 5), fieldbackground=p["field"], foreground=p["text"],

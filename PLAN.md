@@ -3,7 +3,7 @@
 A Windows background app: type a shortcut such as `;addr`, press a hotkey, and the shortcut is replaced by its full message.
 
 **Decisions so far**
-- **Trigger:** type the shortcut, then press the hotkey (configurable, default `Ctrl+Space`).
+- **Trigger:** type the shortcut, then press the hotkey (configurable, default `Ctrl+Space`). Optionally, shortcuts also expand automatically after a space or punctuation (step 12).
 - **Tech:** Python, with `pynput` for system-wide key listening and typing, and `tkinter` for the window.
 - **Interface:** a system-tray icon (`pystray`) plus a settings window.
 - **Speed:** a delay between typed characters. 0 means instant, which pastes through the clipboard.
@@ -37,6 +37,8 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
   {
     "hotkey": "<ctrl>+<space>",
     "char_delay_ms": 0,
+    "theme": "light",
+    "auto_expand": false,
     "snippets": { ";addr": "123 Example St\nSpringfield", ";sig": "Best,\nYour Name" }
   }
   ```
@@ -113,6 +115,16 @@ A Windows background app: type a shortcut such as `;addr`, press a hotkey, and t
 ## Step 11: Starting with Windows (optional)
 - [ ] A "Start with Windows" checkbox in settings that adds a shortcut to the Startup folder.
 - [ ] Later, optionally, package it as a single `.exe` with PyInstaller (another download).
+
+## Step 12: More features ✅
+- [x] **Modern look and dark mode** (`theme.py`): the settings window is restyled on tkinter's built-in "clam" theme (no download), with bordered panels, an accent Save button, a slim scrollbar and roomier rows. A Light / Dark switch under Settings → Appearance is saved as `"theme"`. Dark mode also darkens the Windows title bar. An unknown theme in the file falls back to light, without backing up the whole file.
+- [x] **Search box** above the snippet list (Ctrl+F): filters by shortcut or message, ignoring case. Shows "No snippets match" when nothing does. Searching doesn't reload the form, so unsaved changes stay; saving a snippet the search hides clears the search.
+- [x] **Placeholders** (`placeholders.py`): `{date}` and `{time}` (Windows' short formats), `{clipboard}` (its text, or nothing) and `{cursor}` (the cursor is moved back there with Left presses). Filled in one pass, so placeholder-like text that comes from the clipboard stays as it is. Unknown `{…}` text is left alone. A hint under the message box lists them.
+- [x] **Automatic expansion** (`"auto_expand"`, off by default; a checkbox under the hotkey). A shortcut also expands when followed by:
+  - a space or punctuation (anything but a letter, digit or `_`): it has already reached the app, so it's erased with the shortcut and typed again after the message;
+  - Enter or Tab (with no modifiers): held back from the app and pressed after the message, so Enter can't send a chat message with the shortcut still in it, and Tab can't move to another box before the Backspaces.
+  - If the typed text could still become a longer shortcut (`;a` then `.` with `;a.b` saved), it waits. The hotkey keeps working as before.
+- [ ] By hand (add to the TESTING.md checklist): automatic expansion in a browser and a chat app (Enter after a shortcut), `{cursor}` in Word and a browser, `{clipboard}` with text and with an image copied.
 
 ---
 

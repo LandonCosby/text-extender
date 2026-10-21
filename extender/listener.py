@@ -11,6 +11,11 @@ How a key press travels:
 When the hotkey is pressed, a background thread finds the shortcut just typed and has
 the expander replace it. Keys the app presses itself (marked "injected" by Windows) are
 ignored, and the buffer is cleared on mouse clicks and when you switch windows.
+
+With automatic expansion on, a shortcut also expands when it's followed by a space,
+punctuation, Enter or Tab. A space or punctuation reaches the app first, so it's erased
+with the shortcut and typed again after the message. Enter and Tab are held back
+instead (Enter may send a chat message, Tab may move to another box) and pressed after.
 """
 
 import ctypes
@@ -25,7 +30,7 @@ from pynput.keyboard import HotKey, Key, KeyCode
 from .buffer import TypedBuffer
 from .config import validate_hotkey
 from .expander import Expander
-from .matcher import find_match
+from .matcher import could_continue, find_match
 
 WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0100, 0x0101, 0x0104, 0x0105
 LLKHF_INJECTED, LLKHF_LOWER_IL_INJECTED = 0x10, 0x02
@@ -51,6 +56,17 @@ PYNPUT_MODIFIERS = {
 MENU_MASK_KEY = KeyCode.from_vk(0xE8)
 
 MATCH_SETTLE = 0.02  # let pending key presses reach the buffer before matching
+
+# Keys that end a shortcut for automatic expansion and are held back from the app.
+VK_RETURN, VK_TAB = 0x0D, 0x09
+HELD_BACK_KEYS = {VK_RETURN: Key.enter, VK_TAB: Key.tab}
+
+
+def ends_shortcut(char):
+    """Whether a typed character can trigger automatic expansion: a space or
+    punctuation, but not a letter, a digit or _."""
+    return (char is not None and len(char) == 1 and char.isprintable()
+            and not char.isalnum() and char != "_")
 
 
 class ParsedHotkey(NamedTuple):
@@ -163,6 +179,15 @@ class TextExtender:
             self._blocked_vk = vk
             self.hotkey_pressed()
             return True
+        if (down and vk in HELD_BACK_KEYS and self.config.auto_expand and not self.held
+                and not self.paused and not self.expander.is_typing):
+            self._check_window()
+            match = find_match(self.buffer.text, self.config.snippets)
+            if match is not None:
+                self._blocked_vk = vk
+                self.buffer.clear()
+                self.run_in_background(lambda: self._expand_auto(match, key_after=HELD_BACK_KEYS[vk]))
+                return True
         return False
 
     def on_press(self, key, injected=False):
@@ -171,7 +196,24 @@ class TextExtender:
             return
         self._check_window()
         ctrl = "ctrl" in self.held or "cmd" in self.held
-        self.buffer.key_pressed(key, ctrl=ctrl, alt="alt" in self.held)
+        alt = "alt" in self.held
+        if self.config.auto_expand and not ctrl and not alt and self._auto_expand(key):
+            return
+        self.buffer.key_pressed(key, ctrl=ctrl, alt=alt)
+
+    def _auto_expand(self, key):
+        """If this key is a space or punctuation right after a shortcut, expand it.
+        Returns whether it did."""
+        char = " " if key == Key.space else key.char if isinstance(key, KeyCode) else None
+        if not ends_shortcut(char):
+            return False
+        typed = self.buffer.text
+        match = find_match(typed, self.config.snippets)
+        if match is None or could_continue(typed + char, self.config.snippets):
+            return False
+        self.buffer.clear()
+        self.run_in_background(lambda: self._expand_auto(match, typed_after=char))
+        return True
 
     def on_click(self, x, y, button, pressed):
         if pressed:
@@ -203,6 +245,13 @@ class TextExtender:
             return
         try:
             self.expander.expand(match, self.config.char_delay_ms)
+        finally:
+            self.buffer.clear()
+
+    def _expand_auto(self, match, **ending):
+        self.sleep(MATCH_SETTLE)  # let the typed space or punctuation reach the app first
+        try:
+            self.expander.expand(match, self.config.char_delay_ms, **ending)
         finally:
             self.buffer.clear()
 

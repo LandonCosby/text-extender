@@ -4,7 +4,7 @@ import pytest
 from pynput.keyboard import KeyCode
 
 from extender.buffer import TypedBuffer
-from extender.matcher import Match, find_match
+from extender.matcher import Match, could_continue, find_match
 
 SNIPPETS = {
     ";addr": "123 Example St\nSpringfield",
@@ -90,3 +90,18 @@ def test_works_with_the_typed_text_buffer():
     assert find_match(buffer.text, SNIPPETS).shortcut == ";addr2"
     buffer.key_pressed(KeyCode.from_char("x"))
     assert find_match(buffer.text, SNIPPETS) is None
+
+
+# Waiting for a longer shortcut (automatic expansion)
+
+def test_could_continue_when_the_end_starts_a_shortcut():
+    snippets = {";a": "short", ";a.b": "longer"}
+    assert could_continue("hi ;a.", snippets)  # might be ;a.b
+    assert could_continue("hi ;a.b", snippets)  # is ;a.b
+
+
+def test_could_not_continue_otherwise():
+    snippets = {";a": "short", ";a.b": "longer"}
+    assert not could_continue("hi ;a,", snippets)
+    assert not could_continue("hi ;a ", snippets)
+    assert not could_continue("hi.", {".x": "dot"})  # '.' after 'hi' doesn't stand alone

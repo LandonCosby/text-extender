@@ -7,6 +7,7 @@ because snippets can contain personal details:
       "hotkey": "<ctrl>+<space>",
       "char_delay_ms": 0,
       "theme": "light",
+      "auto_expand": false,
       "snippets": {";addr": "123 Example St\nSpringfield"}
     }
 """
@@ -45,12 +46,14 @@ class Config:
     char_delay_ms: int = DEFAULT_CHAR_DELAY_MS
     snippets: dict = field(default_factory=dict)  # shortcut -> message
     theme: str = DEFAULT_THEME  # how the settings window looks: "light" or "dark"
+    auto_expand: bool = False  # also expand after a space or punctuation, without the hotkey
 
     def validate(self):
         """Raise ConfigError if anything isn't allowed."""
         validate_hotkey(self.hotkey)
         validate_char_delay(self.char_delay_ms)
         validate_theme(self.theme)
+        validate_auto_expand(self.auto_expand)
         if not isinstance(self.snippets, dict):
             raise ConfigError("Snippets must be a list of shortcuts and messages.")
         for shortcut, message in self.snippets.items():
@@ -116,6 +119,11 @@ def validate_theme(theme):
         raise ConfigError("The theme must be light or dark.")
 
 
+def validate_auto_expand(value):
+    if not isinstance(value, bool):
+        raise ConfigError("Automatic expansion must be on (true) or off (false).")
+
+
 def validate_shortcut(shortcut):
     if not isinstance(shortcut, str) or not shortcut:
         raise ConfigError("The shortcut can't be empty.")
@@ -153,6 +161,7 @@ def load(path=None):
             snippets=dict(data.get("snippets", {})),
             # Only changes the look, so an unknown theme isn't worth backing the file up for.
             theme=data["theme"] if data.get("theme") in THEMES else DEFAULT_THEME,
+            auto_expand=data.get("auto_expand", False),
         )
         config.validate()
         return config
@@ -181,7 +190,7 @@ def save(config, path=None):
     path = Path(path) if path else default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {"hotkey": config.hotkey, "char_delay_ms": config.char_delay_ms,
-            "theme": config.theme, "snippets": config.snippets}
+            "theme": config.theme, "auto_expand": config.auto_expand, "snippets": config.snippets}
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:

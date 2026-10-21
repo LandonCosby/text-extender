@@ -17,6 +17,7 @@ from extender.settings_window import (
     describe_speed,
     hotkey_from_keys,
     hotkey_warning,
+    matches_search,
     message_preview,
     PREVIEW_TEXT,
 )
@@ -414,3 +415,75 @@ def test_failed_theme_save_keeps_the_old_theme(make_window, recorder):
     window.theme_buttons["dark"].invoke()
     assert window.theme_var.get() == "light"
     assert window.config.theme == "light"
+
+
+
+# Searching
+
+def test_matches_search():
+    assert matches_search("", ";sig", "Best")
+    assert matches_search("SIG", ";sig", "Best")
+    assert matches_search("best", ";sig", "Best,\nYour Name")
+    assert not matches_search("zzz", ";sig", "Best")
+
+
+def test_search_filters_the_list(make_window):
+    window = make_window()
+    window.search_var.set("example")
+    assert [row[0] for row in listed(window)] == [";addr"]
+    window.search_var.set("")
+    assert [row[0] for row in listed(window)] == [";sig", ";addr"]
+
+
+def test_search_with_no_results_says_so(make_window):
+    window = make_window()
+    window.search_var.set("zzz")
+    assert listed(window) == []
+    assert window.no_results.winfo_manager() == "place"
+    window.search_var.set("")
+    assert window.no_results.winfo_manager() == ""
+
+
+def test_search_keeps_unsaved_changes_in_the_form(make_window):
+    window = make_window()
+    select(window, ";sig")
+    fill_form(window, ";sig", "Changed but not saved")
+    window.search_var.set("sig")
+    window.master.update()
+    assert window.form_values() == (";sig", "Changed but not saved")
+
+
+def test_saving_a_snippet_the_search_hides_clears_the_search(make_window):
+    window = make_window()
+    window.search_var.set("example")
+    window.new_snippet()
+    fill_form(window, ";hi", "Hello")
+    assert window.save_snippet()
+    assert window.search_var.get() == ""
+    assert window.tree.selection() == (";hi",)
+
+
+def test_search_hint_hides_while_there_is_text(make_window):
+    window = make_window()
+    assert window.search_hint.winfo_manager() == "place"
+    window.search_var.set("x")
+    assert window.search_hint.winfo_manager() == ""
+
+
+# Automatic expansion
+
+def test_auto_expand_checkbox_saves_the_setting(make_window, recorder):
+    window = make_window()
+    assert window.auto_var.get() is False
+    window.auto_check.invoke()
+    assert recorder.saved[-1].auto_expand is True
+    window.auto_check.invoke()
+    assert recorder.saved[-1].auto_expand is False
+
+
+def test_failed_auto_expand_save_unticks_the_box(make_window, recorder):
+    recorder.fail_with = OSError("Disk is full")
+    window = make_window()
+    window.auto_check.invoke()
+    assert window.auto_var.get() is False
+    assert window.config.auto_expand is False
