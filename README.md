@@ -6,7 +6,7 @@ A Windows background app for typing long text quickly: type a shortcut such as `
 - Change the hotkey, or have shortcuts expand automatically after a space or punctuation
 - Change how fast the message is typed (or paste it instantly)
 
-**Status:** in progress. See [PLAN.md](PLAN.md) for the steps.
+**Status:** in progress.
 
 ## Setup
 
