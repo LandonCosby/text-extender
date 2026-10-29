@@ -4,6 +4,7 @@ The real window is created (hidden) and driven by calling its buttons and handle
 Saving goes to a recorder instead of the config file.
 """
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ tk = pytest.importorskip("tkinter")
 from extender.config import Config, ConfigError
 from extender.settings_window import (
     SettingsWindow,
+    count,
     describe_hotkey,
     describe_speed,
     hotkey_from_keys,
@@ -41,9 +43,30 @@ def recorder():
     return Recorder()
 
 
+class FakeStartup:
+    """Stands in for the Windows startup list."""
+
+    def __init__(self, enabled=False, fail=False):
+        self.enabled = enabled
+        self.fail = fail
+
+    def is_enabled(self):
+        return self.enabled
+
+    def enable(self):
+        if self.fail:
+            raise PermissionError(13, "Access is denied")
+        self.enabled = True
+
+    def disable(self):
+        if self.fail:
+            raise PermissionError(13, "Access is denied")
+        self.enabled = False
+
+
 @pytest.fixture
 def make_window(root, recorder):
-    def make(config=None, answer=True):
+    def make(config=None, answer=True, startup=None, file_path=""):
         events = []
         window = SettingsWindow(
             root,
@@ -52,6 +75,9 @@ def make_window(root, recorder):
             on_capture_start=lambda: events.append("paused"),
             on_capture_end=lambda: events.append("resumed"),
             confirm=lambda title, question: (events.append(("asked", question)), answer)[1],
+            startup=startup or FakeStartup(),
+            ask_open_path=lambda: str(file_path),
+            ask_save_path=lambda: str(file_path),
         )
         window.events = events
         return window
@@ -487,3 +513,105 @@ def test_failed_auto_expand_save_unticks_the_box(make_window, recorder):
     window.auto_check.invoke()
     assert window.auto_var.get() is False
     assert window.config.auto_expand is False
+
+
+# Importing and exporting snippets
+
+def write_snippets(path, snippets):
+    path.write_text(json.dumps({"snippets": snippets}), encoding="utf-8")
+
+
+def test_count():
+    assert count(1, "snippet") == "1 snippet"
+    assert count(0, "snippet") == "0 snippets"
+    assert count(3, "snippet") == "3 snippets"
+
+
+def test_export_writes_every_snippet(make_window, tmp_path):
+    file = tmp_path / "out.json"
+    window = make_window(file_path=file)
+    assert window.export_snippets()
+    assert json.loads(file.read_text(encoding="utf-8")) == {
+        "snippets": {";sig": "Best,\nYour Name", ";addr": "123 Example St"}}
+    assert "Exported 2 snippets to out.json" in window.status.cget("text")
+
+
+def test_export_with_no_snippets_says_so(make_window, tmp_path):
+    window = make_window(Config(), file_path=tmp_path / "out.json")
+    assert not window.export_snippets()
+    assert not (tmp_path / "out.json").exists()
+    assert "no snippets" in window.status.cget("text")
+
+
+def test_cancelling_export_or_import_does_nothing(make_window, recorder):
+    window = make_window(file_path="")
+    assert not window.export_snippets()
+    assert not window.import_snippets()
+    assert recorder.saved == []
+
+
+def test_import_adds_new_snippets(make_window, recorder, tmp_path):
+    file = tmp_path / "in.json"
+    write_snippets(file, {";hi": "Hello", ";sig": "Best,\nYour Name"})
+    window = make_window(file_path=file)
+    assert window.import_snippets()
+    assert recorder.saved[-1].snippets[";hi"] == "Hello"
+    assert (";hi", "Hello") in listed(window)
+    assert window.events == []  # nothing clashed, so nothing to ask
+    assert "Imported 1 new snippet." in window.status.cget("text")
+
+
+@pytest.mark.parametrize("answer, expected", [(True, "theirs"), (False, "Best,\nYour Name")])
+def test_import_asks_before_replacing_a_different_message(make_window, recorder, tmp_path, answer, expected):
+    file = tmp_path / "in.json"
+    write_snippets(file, {";sig": "theirs", ";hi": "Hello"})
+    window = make_window(answer=answer, file_path=file)
+    assert window.import_snippets()
+    assert window.events[0][0] == "asked"
+    assert "1 shortcut in the file already exists" in window.events[0][1]
+    assert recorder.saved[-1].snippets[";sig"] == expected
+
+
+def test_import_with_nothing_new_saves_nothing(make_window, recorder, tmp_path):
+    file = tmp_path / "in.json"
+    write_snippets(file, {";addr": "123 Example St"})
+    window = make_window(file_path=file)
+    assert window.import_snippets()
+    assert recorder.saved == []
+    assert "Nothing to import" in window.status.cget("text")
+
+
+def test_import_of_a_bad_file_changes_nothing(make_window, recorder, tmp_path):
+    file = tmp_path / "in.json"
+    file.write_text("not json", encoding="utf-8")
+    window = make_window(file_path=file)
+    assert not window.import_snippets()
+    assert recorder.saved == []
+    assert "valid JSON" in window.status.cget("text")
+
+
+# Starting with Windows
+
+def test_startup_box_shows_the_current_state(make_window):
+    assert make_window(startup=FakeStartup(enabled=True)).startup_var.get()
+    assert not make_window(startup=FakeStartup(enabled=False)).startup_var.get()
+
+
+def test_ticking_the_startup_box_turns_it_on_and_off(make_window):
+    startup = FakeStartup()
+    window = make_window(startup=startup)
+    window.startup_var.set(True)
+    assert window.startup_toggled()
+    assert startup.enabled
+    window.startup_var.set(False)
+    assert window.startup_toggled()
+    assert not startup.enabled
+    assert "won't start" in window.status.cget("text")
+
+
+def test_startup_box_goes_back_if_windows_refuses(make_window):
+    window = make_window(startup=FakeStartup(fail=True))
+    window.startup_var.set(True)
+    assert not window.startup_toggled()
+    assert not window.startup_var.get()
+    assert "Access is denied" in window.status.cget("text")

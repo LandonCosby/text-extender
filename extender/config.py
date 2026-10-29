@@ -88,6 +88,21 @@ class Config:
             raise ConfigError(f"There's no snippet for '{shortcut}'.")
         del self.snippets[shortcut]
 
+    def import_snippets(self, snippets, replace_existing):
+        """Add snippets from an exported file. A shortcut that already exists with a
+        different message is replaced only if replace_existing. Returns how many
+        were added and how many replaced."""
+        added = replaced = 0
+        for shortcut, message in snippets.items():
+            if shortcut not in self.snippets:
+                added += 1
+            elif self.snippets[shortcut] != message and replace_existing:
+                replaced += 1
+            else:
+                continue
+            self.snippets[shortcut] = message
+        return added, replaced
+
 
 def validate_hotkey(hotkey):
     """A hotkey is pynput text such as '<ctrl>+<space>' or '<ctrl>+<alt>+e': at least
@@ -184,13 +199,18 @@ def backup_damaged(path):
 
 
 def save(config, path=None):
-    """Check the config, then write it. It's written to a temporary file that then
-    replaces the real one, so a crash part-way through can't leave it half-written."""
+    """Check the config, then write it."""
     config.validate()
     path = Path(path) if path else default_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     data = {"hotkey": config.hotkey, "char_delay_ms": config.char_delay_ms,
             "theme": config.theme, "auto_expand": config.auto_expand, "snippets": config.snippets}
+    write_json(data, path)
+
+
+def write_json(data, path):
+    """Write to a temporary file that then replaces the real one, so a crash part-way
+    through can't leave it half-written."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -199,3 +219,32 @@ def save(config, path=None):
     except BaseException:
         os.unlink(temp)
         raise
+
+
+# Exporting and importing snippets, for backups or moving them to another PC. The file
+# looks like {"snippets": {...}}, so a copy of config.json can be imported too.
+
+def export_snippets(snippets, path):
+    write_json({"snippets": snippets}, Path(path))
+
+
+def read_snippets(path):
+    """The snippets in an exported file (or a config.json). Raises ConfigError, with a
+    message for the user, if the file can't be read or anything in it isn't allowed.
+    Nothing is imported unless every snippet is fine."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as e:
+        raise ConfigError(f"Couldn't read the file: {e.strerror or e}.") from None
+    except ValueError:  # not JSON, or not UTF-8
+        raise ConfigError("That file isn't a snippets file (it isn't valid JSON).") from None
+    if not isinstance(data, dict) or not isinstance(data.get("snippets"), dict):
+        raise ConfigError("That file has no snippets in it.")
+    snippets = data["snippets"]
+    for shortcut, message in snippets.items():
+        try:
+            validate_shortcut(shortcut)
+            validate_message(message)
+        except ConfigError as e:
+            raise ConfigError(f"The snippet '{shortcut}' in that file isn't allowed: {e}") from None
+    return snippets

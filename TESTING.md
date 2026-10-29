@@ -52,6 +52,15 @@ Tick each one off, and note anything that goes wrong.
 - [ ] Pause from the tray: the icon goes grey and nothing expands. Resume: it works again.
 - [ ] Close the settings window: expansions still work. Run `python main.py` again: the settings window comes back.
 
+**Import, export and startup**
+- [ ] Export… your snippets, delete one, then Import… the file: it comes back, and nothing else changes.
+- [ ] Change a snippet's message, then import the exported file again: it asks whether to replace it. **No** keeps yours; **Yes** brings the file's back.
+- [ ] Tick **Start with Windows**, sign out and back in: the app starts by itself. It's also listed in Task Manager → Startup apps. Untick it, and it no longer starts.
+
+**The `.exe`** (`python tools/build_exe.py`, then run `dist\TextExtender.exe`)
+- [ ] It starts without Python (try it on a PC that doesn't have Python, if you can), shows the tray icon, and `;te` expands.
+- [ ] **Start with Windows** ticked from the `.exe` starts the `.exe` at sign-in, not Python.
+
 **Known limit**
 - [ ] Open Notepad **as administrator** (right-click → Run as administrator) and try `;te`: it doesn't expand. That's expected; Windows blocks normal programs from typing into administrator programs.
 

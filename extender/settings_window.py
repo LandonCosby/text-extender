@@ -8,16 +8,19 @@ changes.
 
 import copy
 import tkinter as tk
-from tkinter import messagebox, ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from . import theme
-from .config import MAX_CHAR_DELAY_MS, THEMES, ConfigError
+from .config import MAX_CHAR_DELAY_MS, THEMES, ConfigError, export_snippets, read_snippets
 from .expander import MIN_TYPING_DELAY_MS
 from .listener import parse_hotkey
+from .startup import StartWithWindows
 
 PREVIEW_TEXT = "The quick brown fox jumps over the lazy dog."
 SPEED_SAVE_DELAY_MS = 400  # wait for the slider to settle before saving
 MESSAGE_PREVIEW_LENGTH = 48
+SNIPPET_FILE_TYPES = [("Snippets file", "*.json"), ("All files", "*.*")]
 
 # Hotkey recording: tkinter key names -> pynput hotkey parts.
 MODIFIER_KEYSYMS = {
@@ -112,6 +115,11 @@ def matches_search(search, shortcut, message):
     return search in shortcut.casefold() or search in message.casefold()
 
 
+def count(number, word):
+    """count(1, 'snippet') -> '1 snippet', count(3, 'snippet') -> '3 snippets'."""
+    return f"{number} {word}{'' if number == 1 else 's'}"
+
+
 def describe_speed(delay_ms):
     """How fast messages appear. Delays under MIN_TYPING_DELAY_MS are typed at that
     speed anyway (apps can't keep up with faster), so that's what's shown."""
@@ -122,11 +130,15 @@ def describe_speed(delay_ms):
 
 class SettingsWindow:
     def __init__(self, master, config, on_change, on_capture_start=lambda: None,
-                 on_capture_end=lambda: None, confirm=None, on_quit=None):
+                 on_capture_end=lambda: None, confirm=None, on_quit=None, startup=None,
+                 ask_open_path=None, ask_save_path=None):
         """on_change(new_config) saves and applies settings; it may raise ConfigError
         or OSError. The capture callbacks pause and resume the global listener while
         a new hotkey is recorded. confirm(title, question) -> bool asks the user.
-        on_quit, if given, adds a "Quit Text Extender" button that ends the app."""
+        on_quit, if given, adds a "Quit Text Extender" button that ends the app.
+        startup turns starting with Windows on and off (a StartWithWindows unless
+        replaced in tests). ask_open_path() and ask_save_path() ask for a file to import
+        from or export to, returning "" if cancelled."""
         self.master = master
         self.config = copy.deepcopy(config)
         self.on_change = on_change
@@ -134,6 +146,12 @@ class SettingsWindow:
         self.on_capture_end = on_capture_end
         self.on_quit = on_quit
         self.confirm = confirm or (lambda title, question: messagebox.askyesno(title, question, parent=master))
+        self.startup = startup or StartWithWindows()
+        self.ask_open_path = ask_open_path or (lambda: filedialog.askopenfilename(
+            parent=master, title="Import snippets", filetypes=SNIPPET_FILE_TYPES))
+        self.ask_save_path = ask_save_path or (lambda: filedialog.asksaveasfilename(
+            parent=master, title="Export snippets", initialfile="snippets.json",
+            defaultextension=".json", filetypes=SNIPPET_FILE_TYPES))
         self.editing = None  # shortcut of the snippet in the form, or None for a new one
         self.capturing = False
         self._held = set()
@@ -177,9 +195,11 @@ class SettingsWindow:
             self.search_entry.bind(event, lambda e: self._show_search_hint(), add=True)
         self.search_var.trace_add("write", lambda *args: self.search_changed())
         self.master.bind("<Control-f>", self.ctrl_f)
-        ttk.Button(list_card, text="+ New snippet", command=self.new_snippet).grid(row=0, column=2, sticky="e")
+        ttk.Button(list_card, text="Import…", command=self.import_snippets).grid(row=0, column=2, sticky="e", padx=(0, 8))
+        ttk.Button(list_card, text="Export…", command=self.export_snippets).grid(row=0, column=3, sticky="e", padx=(0, 8))
+        ttk.Button(list_card, text="+ New snippet", command=self.new_snippet).grid(row=0, column=4, sticky="e")
         list_frame = ttk.Frame(list_card, style="Inner.TFrame")
-        list_frame.grid(row=1, column=0, columnspan=3, sticky="nsew", pady=(8, 0))
+        list_frame.grid(row=1, column=0, columnspan=5, sticky="nsew", pady=(8, 0))
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(list_frame, columns=("shortcut", "message"), show="headings",
@@ -254,6 +274,13 @@ class SettingsWindow:
             button.pack(side="left")
             self.theme_buttons[name] = button
 
+        # Shares the Appearance row, so the window still fits on a 1080p screen.
+        self.startup_var = tk.BooleanVar(value=self._startup_enabled())
+        self.startup_check = ttk.Checkbutton(
+            settings, text="Start with Windows",
+            variable=self.startup_var, style="Card.TCheckbutton", command=self.startup_toggled)
+        self.startup_check.grid(row=5, column=1, columnspan=2, sticky="e", pady=(10, 0))
+
         bottom = ttk.Frame(outer)
         bottom.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         bottom.columnconfigure(0, weight=1)
@@ -317,6 +344,27 @@ class SettingsWindow:
         if not self.commit(new, message):
             self.auto_var.set(self.config.auto_expand)
             return False
+        return True
+
+    def _startup_enabled(self):
+        try:
+            return self.startup.is_enabled()
+        except OSError:
+            return False
+
+    def startup_toggled(self):
+        on = self.startup_var.get()
+        try:
+            if on:
+                self.startup.enable()
+            else:
+                self.startup.disable()
+        except OSError as e:
+            self.show_status(f"Couldn't change the startup setting: {e.strerror or e}", error=True)
+            self.startup_var.set(not on)
+            return False
+        self.show_status("Text Extender will start when you sign in to Windows." if on
+                         else "Text Extender won't start with Windows.")
         return True
 
     def _show_settings(self):
@@ -424,6 +472,52 @@ class SettingsWindow:
             return False
         self.refresh_list()
         self.new_snippet()
+        return True
+
+    def import_snippets(self):
+        """Add the snippets from an exported file. If some of its shortcuts already
+        exist with different messages, asks whether to replace them."""
+        path = self.ask_open_path()
+        if not path:
+            return False
+        try:
+            snippets = read_snippets(path)
+        except ConfigError as e:
+            self.show_status(str(e), error=True)
+            return False
+        clashes = [s for s, m in snippets.items() if s in self.config.snippets and self.config.snippets[s] != m]
+        replace = bool(clashes) and self.confirm(
+            "Import snippets",
+            f"{count(len(clashes), 'shortcut')} in the file already "
+            f"{'exists' if len(clashes) == 1 else 'exist'} here with a different message. "
+            "Replace yours with the file's?\n\nChoose No to keep yours.")
+        new = copy.deepcopy(self.config)
+        added, replaced = new.import_snippets(snippets, replace_existing=replace)
+        if not added and not replaced:
+            self.show_status("Nothing to import: you already have the snippets in that file.")
+            return True
+        message = f"Imported {count(added, 'new snippet')}"
+        if replaced:
+            message += f" and replaced {replaced}"
+        if not self.commit(new, message + "."):
+            return False
+        self.refresh_list()
+        return True
+
+    def export_snippets(self):
+        """Save all the snippets to a file of your choice."""
+        if not self.config.snippets:
+            self.show_status("There are no snippets to export yet.", error=True)
+            return False
+        path = self.ask_save_path()
+        if not path:
+            return False
+        try:
+            export_snippets(self.config.snippets, path)
+        except OSError as e:
+            self.show_status(f"Couldn't save the file: {e.strerror or e}", error=True)
+            return False
+        self.show_status(f"Exported {count(len(self.config.snippets), 'snippet')} to {Path(path).name}.")
         return True
 
     # Hotkey

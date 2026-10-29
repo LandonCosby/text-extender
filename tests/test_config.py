@@ -251,3 +251,49 @@ def test_rejects_unknown_themes(theme):
 def test_auto_expand_must_be_true_or_false(value):
     with pytest.raises(ConfigError):
         cfg.validate_auto_expand(value)
+
+
+# Exporting and importing snippets
+
+def test_export_then_read_gives_the_same_snippets(tmp_path):
+    snippets = {";sig": "Best,\nYour Name", ";café": "Grüße 👋"}
+    cfg.export_snippets(snippets, tmp_path / "snippets.json")
+    assert cfg.read_snippets(tmp_path / "snippets.json") == snippets
+
+
+def test_a_config_file_can_be_imported_too(path):
+    cfg.save(Config(snippets={";hi": "Hello"}), path)
+    assert cfg.read_snippets(path) == {";hi": "Hello"}
+
+
+@pytest.mark.parametrize("contents, problem", [
+    ("not json", "valid JSON"),
+    ("[1, 2]", "no snippets"),
+    ('{"hotkey": "<ctrl>+<space>"}', "no snippets"),
+    ('{"snippets": {"two words": "Hi"}}', "two words"),
+    ('{"snippets": {";hi": ""}}', ";hi"),
+])
+def test_reading_a_bad_snippets_file_is_refused(tmp_path, contents, problem):
+    file = tmp_path / "snippets.json"
+    file.write_text(contents, encoding="utf-8")
+    with pytest.raises(ConfigError, match=problem):
+        cfg.read_snippets(file)
+
+
+def test_reading_a_missing_file_is_refused(tmp_path):
+    with pytest.raises(ConfigError, match="Couldn't read"):
+        cfg.read_snippets(tmp_path / "missing.json")
+
+
+def test_import_adds_new_snippets_and_keeps_existing_ones():
+    config = Config(snippets={";a": "mine", ";b": "same"})
+    added, replaced = config.import_snippets({";a": "theirs", ";b": "same", ";c": "new"}, replace_existing=False)
+    assert (added, replaced) == (1, 0)
+    assert config.snippets == {";a": "mine", ";b": "same", ";c": "new"}
+
+
+def test_import_can_replace_existing_snippets():
+    config = Config(snippets={";a": "mine", ";b": "same"})
+    added, replaced = config.import_snippets({";a": "theirs", ";b": "same"}, replace_existing=True)
+    assert (added, replaced) == (0, 1)
+    assert config.snippets == {";a": "theirs", ";b": "same"}
