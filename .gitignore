@@ -28,3 +28,7 @@ dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local planning and Claude Code notes
+PLAN.md
+CLAUDE.md
